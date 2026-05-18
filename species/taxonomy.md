@@ -21,6 +21,13 @@
 - **Habitat**: Oil immersion darkfield
 - **Scale**: Microscopic (20-100µm)
 
+## _hybrid_mutation
+- **Function**: `z = z^z + z^c`
+- **Signature c**: (0.4, 0.25)
+- **Morphology**: Unknown — no existing classification. Structurally between arthropod and deep-sea organism; bioluminescent; resists standard staining protocols
+- **Habitat**: Absolute darkfield; no substrate identified
+- **Scale**: Unknown (no reference organism)
+
 ---
 
 ## Hybrid Rules

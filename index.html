@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pickover_biomorphs — specimen viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      color: #aaa;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #ui {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      user-select: none;
+    }
+
+    #ui .label {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 2px;
+    }
+
+    #ui button {
+      background: transparent;
+      border: 1px solid #333;
+      color: #888;
+      font-family: inherit;
+      font-size: 12px;
+      padding: 5px 10px;
+      cursor: pointer;
+      text-align: left;
+      letter-spacing: 0.05em;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    #ui button:hover  { border-color: #666; color: #ccc; }
+    #ui button.active { border-color: #aaa; color: #eee; }
+
+    #info {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      font-size: 10px;
+      color: #333;
+      letter-spacing: 0.08em;
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+
+<div id="ui">
+  <div class="label">species</div>
+  <button data-key="insectoid"  class="active">_base_insectoid</button>
+  <button data-key="embryonic"          >_embryonic</button>
+  <button data-key="radiolarian"        >_radiolarian</button>
+  <button data-key="hybrid_mutation"    >_hybrid_mutation</button>
+</div>
+
+<div id="info">
+  move mouse to mutate · click to freeze
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+// ── Shader sources ─────────────────────────────────────────────────────────────
+// Inline GLSL so the viewer works without a server (file:// protocol).
+// These are identical to the .frag files in /shaders/.
+
+const VERTEX = `
+  attribute vec2 a_position;
+  void main() { gl_Position = vec4(a_position, 0.0, 1.0); }
+`;
+
+const SHADERS = {};
+
+// ── _base_insectoid ───────────────────────────────────────────────────────────
+SHADERS.insectoid = `
+precision highp float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+#define MAX_ITER 80
+#define CONV_THRESH 0.001
+#define ESCAPE_THRESH 50.0
+vec2 cmul(vec2 a, vec2 b) { return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x); }
+vec2 clog(vec2 z) { return vec2(log(length(z)), atan(z.y, z.x)); }
+vec2 cexp(vec2 z) { return exp(z.x) * vec2(cos(z.y), sin(z.y)); }
+vec2 cpow(vec2 z, vec2 w) {
+  if (length(z) < 1e-7) return vec2(0.0);
+  return cexp(cmul(w, clog(z)));
+}
+vec2 biomorph(vec2 z, vec2 c) { return cpow(z, z) + c; }
+vec3 stain(float wander, float final_arg, float iter_ratio) {
+  vec3 chitin      = vec3(0.18, 0.14, 0.08);
+  vec3 membrane    = vec3(0.92, 0.85, 0.72);
+  vec3 haemolymph  = vec3(0.55, 0.12, 0.08);
+  vec3 nucleoplasm = vec3(0.25, 0.35, 0.20);
+  float cuticle = smoothstep(0.3, 0.7, iter_ratio) * (1.0 - wander);
+  float tendril = wander * smoothstep(0.2, 0.6, iter_ratio) * (1.0 - smoothstep(0.7, 0.9, iter_ratio));
+  float core    = (1.0 - iter_ratio) * (1.0 - wander);
+  vec3 col = mix(membrane, chitin, cuticle);
+  col = mix(col, haemolymph, tendril * 0.7);
+  col = mix(col, nucleoplasm, core * 0.5);
+  float segment = sin(final_arg * 6.0) * 0.5 + 0.5;
+  col *= 0.8 + 0.2 * segment;
+  return col;
+}
+void main() {
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  st.x *= u_resolution.x / u_resolution.y;
+  float zoom = 3.0 + 0.5 * sin(u_time * 0.1);
+  vec2 c = (st + vec2(-2.0, -1.5)) * zoom;
+  vec2 mouse_norm = u_mouse / u_resolution;
+  vec2 mutation = vec2(0.5, 0.1) + (mouse_norm - 0.5) * vec2(0.4, 0.2);
+  vec2 z = c;
+  float wander = 0.0, last_z = length(z);
+  bool converged = false; int iter = 0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    z = biomorph(z, mutation);
+    float len = length(z);
+    if (len > ESCAPE_THRESH) { iter = i; break; }
+    float delta = abs(len - last_z);
+    if (delta < CONV_THRESH && i > 10) { converged = true; iter = i; break; }
+    wander += delta; last_z = len; iter = i;
+  }
+  wander /= float(MAX_ITER);
+  float iter_ratio = float(iter) / float(MAX_ITER);
+  float final_arg  = atan(z.y, z.x);
+  vec3 col = stain(wander, final_arg, iter_ratio);
+  float alive = 1.0 - smoothstep(0.0, 0.05, wander + (converged ? 0.0 : 0.1));
+  col *= alive;
+  float vig = 1.0 - smoothstep(0.5, 1.5, length(st - 0.5));
+  col *= vig;
+  float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233))) * 43758.5453);
+  col *= 0.95 + 0.05 * grain;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ── _embryonic ────────────────────────────────────────────────────────────────
+SHADERS.embryonic = `
+precision highp float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+#define MAX_ITER 60
+#define CONV_THRESH 0.0005
+#define ESCAPE_THRESH 40.0
+vec2 csin(vec2 z) { return vec2(sin(z.x)*cosh(z.y), cos(z.x)*sinh(z.y)); }
+vec2 biomorph(vec2 z, vec2 c) { return csin(z) + c; }
+vec3 stain(float wander, float final_arg, float iter_ratio, float time) {
+  vec3 yolk      = vec3(0.95, 0.78, 0.25);
+  vec3 cytoplasm = vec3(0.88, 0.92, 0.85);
+  vec3 nucleus   = vec3(0.65, 0.25, 0.35);
+  vec3 membrane  = vec3(0.72, 0.82, 0.88);
+  float pulse        = sin(time * 2.0 + final_arg * 3.0) * 0.5 + 0.5;
+  float yolk_density = (1.0 - iter_ratio) * (1.0 - wander);
+  float membrane_int = wander * smoothstep(0.3, 0.8, iter_ratio);
+  vec3 col = mix(cytoplasm, yolk, yolk_density * 0.8);
+  col = mix(col, nucleus, yolk_density * 0.4 * pulse);
+  col = mix(col, membrane, membrane_int * 0.5);
+  float tension = sin(final_arg * 8.0 + time) * 0.5 + 0.5;
+  col += membrane * tension * membrane_int * 0.3;
+  return col;
+}
+void main() {
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  st.x *= u_resolution.x / u_resolution.y;
+  vec2 c = (st + vec2(-2.0, -2.0)) * 4.0;
+  vec2 mouse_norm = u_mouse / u_resolution;
+  vec2 mutation = vec2(0.3, 0.4) + (mouse_norm - 0.5) * vec2(0.3, 0.3);
+  vec2 z = c;
+  float wander = 0.0, last_z = length(z);
+  bool converged = false; int iter = 0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    z = biomorph(z, mutation);
+    float len = length(z);
+    if (len > ESCAPE_THRESH) { iter = i; break; }
+    float delta = abs(len - last_z);
+    if (delta < CONV_THRESH && i > 5) { converged = true; iter = i; break; }
+    wander += delta; last_z = len; iter = i;
+  }
+  wander /= float(MAX_ITER);
+  float iter_ratio = float(iter) / float(MAX_ITER);
+  float final_arg  = atan(z.y, z.x);
+  vec3 col = stain(wander, final_arg, iter_ratio, u_time);
+  float alive = 1.0 - smoothstep(0.0, 0.05, wander + (converged ? 0.0 : 0.1));
+  col *= alive;
+  float halo = smoothstep(0.02, 0.08, wander) * (1.0 - smoothstep(0.3, 0.6, wander));
+  col += vec3(0.6, 0.65, 0.7) * halo * 0.4;
+  float vig = 1.0 - smoothstep(0.5, 1.5, length(st - 0.5));
+  col *= vig;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ── _radiolarian ──────────────────────────────────────────────────────────────
+SHADERS.radiolarian = `
+precision highp float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+#define MAX_ITER 100
+#define CONV_THRESH 0.0008
+#define ESCAPE_THRESH 60.0
+vec2 cmul(vec2 a, vec2 b) { return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x); }
+vec2 csin(vec2 z) { return vec2(sin(z.x)*cosh(z.y), cos(z.x)*sinh(z.y)); }
+vec2 biomorph(vec2 z, vec2 c) { return cmul(z, csin(z)) + c; }
+vec3 stain(float wander, float final_arg, float iter_ratio, float radial_sym) {
+  vec3 silicate  = vec3(0.85, 0.90, 0.92);
+  vec3 spine     = vec3(0.95, 0.95, 0.98);
+  vec3 pore      = vec3(0.10, 0.15, 0.20);
+  vec3 cytoplasm = vec3(0.20, 0.35, 0.30);
+  float spine_density = radial_sym * wander;
+  float capsule   = (1.0 - iter_ratio) * 0.8;
+  float pore_field = smoothstep(0.4, 0.6, iter_ratio) * (1.0 - radial_sym);
+  vec3 col = mix(silicate, cytoplasm, capsule);
+  col = mix(col, spine, spine_density * 0.7);
+  col = mix(col, pore,  pore_field  * 0.6);
+  float irid = sin(final_arg * 12.0 + iter_ratio * 20.0) * 0.5 + 0.5;
+  col += vec3(0.6, 0.8, 1.0) * irid * spine_density * 0.3;
+  float fossil = smoothstep(0.7, 0.95, iter_ratio);
+  col = mix(col, vec3(0.75, 0.78, 0.72), fossil * 0.5);
+  return col;
+}
+void main() {
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  st.x *= u_resolution.x / u_resolution.y;
+  vec2 c = (st + vec2(-2.5, -2.5)) * 5.0;
+  vec2 mouse_norm = u_mouse / u_resolution;
+  vec2 mutation = vec2(0.2, 0.15) + (mouse_norm - 0.5) * vec2(0.25, 0.25);
+  vec2 z = c;
+  float wander = 0.0, last_z = length(z), radial_accum = 0.0;
+  bool converged = false; int iter = 0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    z = biomorph(z, mutation);
+    float len = length(z);
+    float arg = atan(z.y, z.x);
+    if (len > ESCAPE_THRESH) { iter = i; break; }
+    float delta = abs(len - last_z);
+    if (delta < CONV_THRESH && i > 8) { converged = true; iter = i; break; }
+    radial_accum += abs(sin(arg * 6.0)) * delta;
+    wander += delta; last_z = len; iter = i;
+  }
+  wander /= float(MAX_ITER);
+  radial_accum /= (wander * float(MAX_ITER) + 0.001);
+  float iter_ratio = float(iter) / float(MAX_ITER);
+  float final_arg  = atan(z.y, z.x);
+  vec3 col = stain(wander, final_arg, iter_ratio, radial_accum);
+  float alive = 1.0 - smoothstep(0.0, 0.03, wander + (converged ? 0.0 : 0.15));
+  col *= alive;
+  float ca = length(st - 0.5) * 0.02; col.r += ca; col.b -= ca * 0.5;
+  float vig = 1.0 - smoothstep(0.5, 1.5, length(st - 0.5));
+  col *= vig;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ── _hybrid_mutation ──────────────────────────────────────────────────────────
+SHADERS.hybrid_mutation = `
+precision highp float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+#define MAX_ITER 120
+#define CONV_THRESH 0.0006
+#define ESCAPE_THRESH 55.0
+vec2 cmul(vec2 a, vec2 b) { return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x); }
+vec2 clog(vec2 z) { return vec2(log(length(z)), atan(z.y, z.x)); }
+vec2 cexp(vec2 z) { return exp(z.x) * vec2(cos(z.y), sin(z.y)); }
+vec2 cpow(vec2 z, vec2 w) {
+  if (length(z) < 1e-7) return vec2(0.0);
+  return cexp(cmul(w, clog(z)));
+}
+vec2 biomorph(vec2 z, vec2 c) { return cpow(z, z) + cpow(z, c); }
+vec3 stain(float wander, float final_arg, float iter_ratio, float time) {
+  vec3 luciferin    = vec3(0.05, 0.55, 0.80);
+  vec3 photoprotein = vec3(0.10, 0.85, 0.65);
+  vec3 void_black   = vec3(0.00, 0.00, 0.03);
+  vec3 corona       = vec3(0.60, 0.15, 0.80);
+  vec3 amber_ghost  = vec3(0.80, 0.55, 0.10);
+  float pulse   = 0.5 + 0.5 * sin(time * 1.3 + final_arg * 4.0);
+  float density = smoothstep(0.0, 0.15, wander);
+  float nucleus = (1.0 - iter_ratio) * (1.0 - wander);
+  float shell   = smoothstep(0.5, 0.9, iter_ratio) * wander;
+  float ghost   = (1.0 - wander) * smoothstep(0.3, 0.6, iter_ratio);
+  vec3 col = void_black;
+  col = mix(col, luciferin,    density * 0.9);
+  col = mix(col, photoprotein, nucleus * pulse);
+  col = mix(col, corona,       shell * 0.6);
+  col = mix(col, amber_ghost,  ghost * 0.25);
+  float fringe = 0.5 + 0.5 * sin(final_arg * 14.0 + iter_ratio * 30.0);
+  col += luciferin * fringe * density * 0.2;
+  return col;
+}
+void main() {
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  st.x *= u_resolution.x / u_resolution.y;
+  float zoom = 4.5 + 0.3 * sin(u_time * 0.07);
+  vec2 c = (st + vec2(-2.25, -2.25)) * zoom;
+  vec2 mouse_norm = u_mouse / u_resolution;
+  vec2 mutation = vec2(0.4, 0.25) + (mouse_norm - 0.5) * vec2(0.5, 0.35);
+  vec2 z = c;
+  float wander = 0.0, last_z = length(z);
+  bool converged = false; int iter = 0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    z = biomorph(z, mutation);
+    float len = length(z);
+    if (len > ESCAPE_THRESH) { iter = i; break; }
+    float delta = abs(len - last_z);
+    if (delta < CONV_THRESH && i > 12) { converged = true; iter = i; break; }
+    wander += delta; last_z = len; iter = i;
+  }
+  wander /= float(MAX_ITER);
+  float iter_ratio = float(iter) / float(MAX_ITER);
+  float final_arg  = atan(z.y, z.x);
+  vec3 col = stain(wander, final_arg, iter_ratio, u_time);
+  float alive = 1.0 - smoothstep(0.0, 0.08, wander + (converged ? 0.0 : 0.12));
+  col *= alive;
+  float vig = 1.0 - smoothstep(0.45, 1.4, length(st - 0.5));
+  col *= vig;
+  float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233))) * 43758.5453);
+  col *= 0.96 + 0.04 * grain;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ── WebGL setup ────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
+
+if (!gl) {
+  document.body.innerHTML = '<p style="color:#f55;padding:2rem">WebGL not available in this browser.</p>';
+  throw new Error('no webgl');
+}
+
+function compileShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    console.error('Shader error:', gl.getShaderInfoLog(s));
+  return s;
+}
+
+function buildProgram(fragSrc) {
+  const vert = compileShader(gl.VERTEX_SHADER, VERTEX);
+  const frag = compileShader(gl.FRAGMENT_SHADER, fragSrc);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vert);
+  gl.attachShader(prog, frag);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
+    console.error('Link error:', gl.getProgramInfoLog(prog));
+  return prog;
+}
+
+// Full-screen quad
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+// State
+let activeKey = 'insectoid';
+let programs  = {};
+let mouse     = { x: 0, y: 0 };
+let frozen    = false;
+let frozenMouse = { x: 0, y: 0 };
+let startTime = performance.now();
+
+function getProgram(key) {
+  if (!programs[key]) programs[key] = buildProgram(SHADERS[key]);
+  return programs[key];
+}
+
+function resize() {
+  canvas.width  = window.innerWidth  * devicePixelRatio | 0;
+  canvas.height = window.innerHeight * devicePixelRatio | 0;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+
+function render(ts) {
+  requestAnimationFrame(render);
+
+  const prog = getProgram(activeKey);
+  gl.useProgram(prog);
+
+  const pos = gl.getAttribLocation(prog, 'a_position');
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.enableVertexAttribArray(pos);
+  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+
+  const mx = frozen ? frozenMouse.x : mouse.x;
+  const my = frozen ? frozenMouse.y : mouse.y;
+
+  gl.uniform2f(gl.getUniformLocation(prog, 'u_resolution'), canvas.width, canvas.height);
+  gl.uniform2f(gl.getUniformLocation(prog, 'u_mouse'),      mx * devicePixelRatio, (window.innerHeight - my) * devicePixelRatio);
+  gl.uniform1f(gl.getUniformLocation(prog, 'u_time'),       (ts - startTime) / 1000.0);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// ── Events ─────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', resize);
+
+window.addEventListener('mousemove', e => {
+  if (!frozen) { mouse.x = e.clientX; mouse.y = e.clientY; }
+});
+
+window.addEventListener('click', e => {
+  if (e.target.tagName === 'BUTTON') return;
+  frozen = !frozen;
+  if (frozen) { frozenMouse.x = mouse.x; frozenMouse.y = mouse.y; }
+});
+
+document.querySelectorAll('#ui button').forEach(btn => {
+  btn.addEventListener('click', e => {
+    activeKey = btn.dataset.key;
+    document.querySelectorAll('#ui button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+resize();
+requestAnimationFrame(render);
+</script>
+
+</body>
+</html>
