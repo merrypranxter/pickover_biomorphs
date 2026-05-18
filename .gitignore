@@ -1,0 +1,26 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local renders / exports
+renders/
+exports/
+*.png
+*.jpg
+*.exr
+*.mp4
+
+# Python exploration artifacts
+__pycache__/
+*.py[cod]
+*.ipynb_checkpoints/
+.env
+
+# Zip archives (source of truth is the repo itself)
+*.zip
