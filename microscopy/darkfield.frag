@@ -25,7 +25,9 @@ vec3 darkfield(vec3 specimen, float intensity) {
 }
 
 // Phase contrast: converts phase shifts into amplitude differences
-// For transparent specimens that barely absorb light
+// For transparent specimens that barely absorb light.
+// NOTE: For a full post-processing pass with edge detection and annular ring
+// simulation, use microscopy/phase_contrast.frag instead.
 vec3 phase_contrast(vec3 specimen, float shift) {
     // Phase shift derived from specimen "density" (luminance proxy)
     float phase = (specimen.r + specimen.g + specimen.b) / 3.0;

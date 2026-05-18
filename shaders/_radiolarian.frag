@@ -97,7 +97,7 @@ void main() {
         }
         
         // Measure radial symmetry component
-        float sym = abs(sin(arg * 6.0)); // Hexaradial baseline
+        float sym = abs(sin(arg * 6.0)); // Hexaradiate baseline (six-fold radial symmetry)
         radial_accum += sym * delta;
         
         wander += delta;

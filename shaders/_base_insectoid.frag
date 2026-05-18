@@ -21,6 +21,7 @@ vec2 cmul(vec2 a, vec2 b) {
 vec2 cpow(vec2 z, vec2 w) {
     // z^w = exp(w * log(z))
     float r = length(z);
+    if (r < 1e-7) return vec2(0.0);   // guard: log(0) is undefined
     float theta = atan(z.y, z.x);
     float log_r = log(r);
     float mag = exp(w.x * log_r - w.y * theta);
