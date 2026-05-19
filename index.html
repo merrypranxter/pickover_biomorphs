@@ -74,6 +74,10 @@
   <button data-key="embryonic"          >_embryonic</button>
   <button data-key="radiolarian"        >_radiolarian</button>
   <button data-key="hybrid_mutation"    >_hybrid_mutation</button>
+  <button data-key="spirochete"         >_spirochete</button>
+  <button data-key="diatom"             >_diatom</button>
+  <button data-key="ctenophore"         >_ctenophore</button>
+  <button data-key="spore"              >_spore</button>
 </div>
 
 <div id="info">
@@ -339,6 +343,257 @@ void main() {
   col *= vig;
   float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898,78.233))) * 43758.5453);
   col *= 0.96 + 0.04 * grain;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ── _spirochete ───────────────────────────────────────────────────────────────
+SHADERS.spirochete = `
+precision highp float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+#define MAX_ITER 90
+#define CONV_THRESH 0.0007
+#define ESCAPE_THRESH 45.0
+vec2 cmul(vec2 a, vec2 b) { return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x); }
+vec2 ccube(vec2 z) { return cmul(cmul(z, z), z); }
+vec2 biomorph(vec2 z, vec2 c) { return ccube(z) + c; }
+vec3 stain(float wander, float final_arg, float iter_ratio, float time) {
+  vec3 safranin  = vec3(0.85, 0.25, 0.28);
+  vec3 nucleoid  = vec3(0.18, 0.22, 0.42);
+  vec3 flagellum = vec3(0.92, 0.80, 0.55);
+  vec3 cytoplasm = vec3(0.88, 0.78, 0.72);
+  float filament = wander * smoothstep(0.2, 0.7, iter_ratio);
+  float core     = (1.0 - iter_ratio) * (1.0 - wander);
+  float tip      = smoothstep(0.75, 0.95, iter_ratio) * (1.0 - wander);
+  vec3 col = cytoplasm;
+  col = mix(col, safranin,  filament * 0.75);
+  col = mix(col, nucleoid,  core * 0.7);
+  col = mix(col, flagellum, tip * 0.6);
+  float segment = sin(final_arg * 9.0 + time * 0.8) * 0.5 + 0.5;
+  col *= 0.82 + 0.18 * segment;
+  return col;
+}
+void main() {
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  st.x *= u_resolution.x / u_resolution.y;
+  float zoom = 3.5 + 0.4 * sin(u_time * 0.09);
+  vec2 c = (st + vec2(-1.8, -1.75)) * zoom;
+  vec2 mouse_norm = u_mouse / u_resolution;
+  vec2 mutation = vec2(-0.4, 0.6) + (mouse_norm - 0.5) * vec2(0.35, 0.25);
+  vec2 z = c;
+  float wander = 0.0, last_z = length(z);
+  bool converged = false; int iter = 0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    z = biomorph(z, mutation);
+    float len = length(z);
+    if (len > ESCAPE_THRESH) { iter = i; break; }
+    float delta = abs(len - last_z);
+    if (delta < CONV_THRESH && i > 8) { converged = true; iter = i; break; }
+    wander += delta; last_z = len; iter = i;
+  }
+  wander /= float(MAX_ITER);
+  float iter_ratio = float(iter) / float(MAX_ITER);
+  float final_arg  = atan(z.y, z.x);
+  vec3 col = stain(wander, final_arg, iter_ratio, u_time);
+  float alive = 1.0 - smoothstep(0.0, 0.04, wander + (converged ? 0.0 : 0.08));
+  col *= alive;
+  float halo = smoothstep(0.015, 0.06, wander) * (1.0 - smoothstep(0.25, 0.5, wander));
+  col += vec3(0.65, 0.70, 0.75) * halo * 0.35;
+  float vig = 1.0 - smoothstep(0.5, 1.5, length(st - 0.5));
+  col *= vig;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ── _diatom ───────────────────────────────────────────────────────────────────
+SHADERS.diatom = `
+precision highp float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+#define MAX_ITER 70
+#define CONV_THRESH 0.0006
+#define ESCAPE_THRESH 50.0
+vec2 ccos(vec2 z) { return vec2(cos(z.x)*cosh(z.y), -sin(z.x)*sinh(z.y)); }
+vec2 biomorph(vec2 z, vec2 c) { return ccos(z) + c; }
+vec3 stain(float wander, float final_arg, float iter_ratio, float bilateral) {
+  vec3 frustule    = vec3(0.78, 0.84, 0.90);
+  vec3 chloroplast = vec3(0.72, 0.58, 0.18);
+  vec3 protoplast  = vec3(0.85, 0.70, 0.30);
+  vec3 stria       = vec3(0.92, 0.94, 0.96);
+  float shell  = smoothstep(0.3, 0.75, iter_ratio) * (1.0 - wander * 0.5);
+  float chloro = (1.0 - iter_ratio) * (1.0 - wander) * 0.9;
+  float striae = pow(abs(sin(final_arg * 16.0)), 4.0) * shell;
+  vec3 col = protoplast;
+  col = mix(col, frustule,    shell * bilateral * 0.8);
+  col = mix(col, chloroplast, chloro);
+  col += stria * striae * 0.25;
+  float thin_film = sin(iter_ratio * 18.0 + final_arg * 4.0 + u_time * 0.05) * 0.5 + 0.5;
+  vec3 irid = vec3(0.5 + 0.5*sin(thin_film*6.28), 0.5 + 0.5*sin(thin_film*6.28+2.09), 0.5 + 0.5*sin(thin_film*6.28+4.19));
+  col = mix(col, irid, shell * 0.12);
+  return col;
+}
+void main() {
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  st.x *= u_resolution.x / u_resolution.y;
+  float zoom = 4.0 + 0.3 * sin(u_time * 0.06);
+  vec2 c = (st + vec2(-2.0, -2.0)) * zoom;
+  vec2 mouse_norm = u_mouse / u_resolution;
+  vec2 mutation = vec2(0.7, 0.2) + (mouse_norm - 0.5) * vec2(0.3, 0.25);
+  vec2 z = c;
+  float wander = 0.0, last_z = length(z), bilateral_accum = 0.0;
+  bool converged = false; int iter = 0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    z = biomorph(z, mutation);
+    float len = length(z);
+    float arg = atan(z.y, z.x);
+    if (len > ESCAPE_THRESH) { iter = i; break; }
+    float delta = abs(len - last_z);
+    if (delta < CONV_THRESH && i > 6) { converged = true; iter = i; break; }
+    bilateral_accum += abs(cos(arg * 2.0)) * delta;
+    wander += delta; last_z = len; iter = i;
+  }
+  wander /= float(MAX_ITER);
+  bilateral_accum /= (wander * float(MAX_ITER) + 0.001);
+  float iter_ratio = float(iter) / float(MAX_ITER);
+  float final_arg  = atan(z.y, z.x);
+  vec3 col = stain(wander, final_arg, iter_ratio, bilateral_accum);
+  float alive = 1.0 - smoothstep(0.0, 0.04, wander + (converged ? 0.0 : 0.1));
+  vec3 bg = vec3(0.92, 0.93, 0.90);
+  col = mix(bg, col, alive);
+  float vig = 1.0 - smoothstep(0.47, 0.52, length(st - 0.5));
+  col *= vig;
+  float grain = fract(sin(dot(gl_FragCoord.xy, vec2(19.311, 57.218))) * 35721.451);
+  col *= 0.97 + 0.03 * grain;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ── _ctenophore ───────────────────────────────────────────────────────────────
+SHADERS.ctenophore = `
+precision highp float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+#define MAX_ITER 80
+#define CONV_THRESH 0.0008
+#define ESCAPE_THRESH 40.0
+vec2 cexp(vec2 z) { return exp(z.x) * vec2(cos(z.y), sin(z.y)); }
+vec2 biomorph(vec2 z, vec2 c) { return cexp(z) + c; }
+vec3 stain(float wander, float final_arg, float iter_ratio, float time) {
+  vec3 mesoglea = vec3(0.08, 0.14, 0.25);
+  vec3 biolumin = vec3(0.10, 0.75, 0.55);
+  vec3 tentacle = vec3(0.55, 0.70, 0.85);
+  float plate_phase = final_arg * 4.0 + time * 2.5 + iter_ratio * 8.0;
+  vec3 comb_irid = 0.5 + 0.5 * vec3(sin(plate_phase), sin(plate_phase+2.094), sin(plate_phase+4.189));
+  float canal        = pow(abs(sin(final_arg * 4.0)), 0.4);
+  float comb_density = canal * smoothstep(0.3, 0.7, iter_ratio) * (1.0 - wander * 0.5);
+  float edge         = smoothstep(0.04, 0.12, wander) * (1.0 - smoothstep(0.3, 0.65, wander));
+  float biolumin_pulse = edge * (0.6 + 0.4 * sin(time * 4.0 + final_arg * 6.0));
+  float tendril = wander * smoothstep(0.4, 0.9, iter_ratio);
+  vec3 col = mesoglea;
+  col += comb_irid * comb_density * 0.7;
+  col = mix(col, biolumin, biolumin_pulse * 0.8);
+  col = mix(col, tentacle, tendril * 0.4);
+  return col;
+}
+void main() {
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  st.x *= u_resolution.x / u_resolution.y;
+  float zoom = 2.5 + 0.2 * sin(u_time * 0.05);
+  vec2 c = (st + vec2(-1.25, -1.25)) * zoom;
+  vec2 mouse_norm = u_mouse / u_resolution;
+  vec2 mutation = vec2(-1.5, 0.1) + (mouse_norm - 0.5) * vec2(0.4, 0.3);
+  vec2 z = c;
+  float wander = 0.0, last_z = length(z);
+  bool converged = false; int iter = 0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    z = biomorph(z, mutation);
+    float len = length(z);
+    if (len > ESCAPE_THRESH) { iter = i; break; }
+    float delta = abs(len - last_z);
+    if (delta < CONV_THRESH && i > 6) { converged = true; iter = i; break; }
+    wander += delta; last_z = len; iter = i;
+  }
+  wander /= float(MAX_ITER);
+  float iter_ratio = float(iter) / float(MAX_ITER);
+  float final_arg  = atan(z.y, z.x);
+  vec3 col = stain(wander, final_arg, iter_ratio, u_time);
+  float alive = 1.0 - smoothstep(0.0, 0.07, wander + (converged ? 0.0 : 0.1));
+  col *= alive;
+  float vig = 1.0 - smoothstep(0.4, 1.3, length(st - 0.5));
+  col *= vig;
+  float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  col *= 0.93 + 0.07 * grain;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ── _spore ────────────────────────────────────────────────────────────────────
+SHADERS.spore = `
+precision highp float;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+#define MAX_ITER 100
+#define PICKOVER_BAILOUT 10.0
+#define ESCAPE_THRESH 50.0
+vec2 cmul(vec2 a, vec2 b) { return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x); }
+vec2 biomorph(vec2 z, vec2 c) { return cmul(z, z) + c; }
+vec3 stain(float stalk_x, float stalk_y, float iter_ratio) {
+  vec3 episporium = vec3(0.72, 0.60, 0.35);
+  vec3 exosporium = vec3(0.62, 0.28, 0.22);
+  vec3 cortex     = vec3(0.75, 0.70, 0.80);
+  vec3 core       = vec3(0.15, 0.18, 0.38);
+  vec3 stalk_col  = vec3(0.82, 0.72, 0.45);
+  float is_stalk = max(stalk_x, stalk_y);
+  float outer = smoothstep(0.5, 0.85, iter_ratio);
+  float thick = smoothstep(0.25, 0.6, iter_ratio) * (1.0 - outer);
+  float inner = smoothstep(0.08, 0.3, iter_ratio) * (1.0 - thick - outer);
+  vec3 col = core;
+  col = mix(col, cortex,     inner);
+  col = mix(col, exosporium, thick);
+  col = mix(col, episporium, outer);
+  col = mix(col, stalk_col,  is_stalk * 0.6);
+  col = mix(col, vec3(0.90, 0.28, 0.55), thick * 0.4);
+  float ring = sin(iter_ratio * 22.0) * 0.5 + 0.5;
+  col *= 0.88 + 0.12 * ring;
+  return col;
+}
+void main() {
+  vec2 st = gl_FragCoord.xy / u_resolution.xy;
+  st.x *= u_resolution.x / u_resolution.y;
+  vec2 mouse_norm = u_mouse / u_resolution;
+  vec2 center = vec2(-0.5, 0.0) + (mouse_norm - 0.5) * vec2(1.0, 0.8);
+  float zoom = 2.8 + 0.15 * sin(u_time * 0.04);
+  vec2 c_param = center + (st - vec2(0.5 * u_resolution.x / u_resolution.y, 0.5)) * zoom;
+  vec2 z = vec2(0.0);
+  float iter_ratio = 0.0;
+  float stalk_x = 0.0, stalk_y = 0.0;
+  bool alive = false;
+  int iter = 0;
+  for (int i = 0; i < MAX_ITER; i++) {
+    z = biomorph(z, c_param);
+    float re_abs = abs(z.x); float im_abs = abs(z.y);
+    bool pe = (re_abs > PICKOVER_BAILOUT) && (im_abs > PICKOVER_BAILOUT);
+    bool se = (re_abs * re_abs + im_abs * im_abs > ESCAPE_THRESH * ESCAPE_THRESH);
+    if (pe || se) { iter = i; if (re_abs < PICKOVER_BAILOUT) stalk_x += 1.0; if (im_abs < PICKOVER_BAILOUT) stalk_y += 1.0; break; }
+    if (re_abs < PICKOVER_BAILOUT * 0.5) stalk_x += 0.5;
+    if (im_abs < PICKOVER_BAILOUT * 0.5) stalk_y += 0.5;
+    alive = true; iter = i + 1;
+  }
+  iter_ratio = float(iter) / float(MAX_ITER);
+  stalk_x /= float(MAX_ITER); stalk_y /= float(MAX_ITER);
+  if (!alive && iter >= MAX_ITER) alive = true;
+  vec3 col;
+  if (alive) {
+    col = stain(stalk_x, stalk_y, iter_ratio);
+    col = mix(vec3(0.90, 0.88, 0.84), col, 0.85);
+    float ca = length(st - 0.5) * 0.025; col.r += ca * 0.5; col.b -= ca * 0.3;
+  } else {
+    float bg = 0.88 + 0.04 * fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    col = vec3(bg * 0.97, bg * 0.96, bg * 0.94);
+  }
+  float vig = 1.0 - smoothstep(0.46, 0.52, length(st - 0.5));
+  col *= vig;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
