@@ -47,7 +47,7 @@
     "GLSL complex arithmetic: cmul, cpow, csin, ccos, cexp, clog",
     "Julia iteration (fixed c, varying z₀) for 7 species",
     "Mandelbrot iteration (fixed z₀=0, varying c) for _spore",
-    "biological stain palette mapping (Gram, H&E, Giemsa, Crystal Violet, PAS)",
+    "biological stain palette mapping (Gram, H&E, Giemsa, Crystal Violet, Periodic Acid-Schiff)",
     "luminance-gradient edge detection for phase-contrast halo",
     "three-channel false-color fluorescence composite with bleed-through and photobleaching",
     "Köhler illumination simulation with depth-of-field softening",

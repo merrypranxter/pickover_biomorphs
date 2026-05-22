@@ -23,7 +23,7 @@ The **wander metric** (`Σ |‖zₙ‖ − ‖zₙ₋₁‖|`) measures total or
 ## Core Themes
 
 - **Complex iteration as morphogenesis** — the same mathematical process that generates Mandelbrot fractals, constrained differently, grows organisms
-- **Axis-aligned escape as anatomy** — the directional bailout creates filaments, symmetry axes, appendage pairs
+- **Axis-aligned escape as anatomy** — the directional bailout creates filaments, symmetry axes, and appendage pairs
 - **Three-pass microscopy simulation** — environment substrate → organism render → optical post-processing
 - **Parameter space as species atlas** — sliding `c` through the complex plane reveals a continuous zoo of forms; species are named landmarks
 - **Color as stain chemistry** — hue encodes specimen type (chitin, membrane, silicate), not aesthetic preference
@@ -47,7 +47,7 @@ The **wander metric** (`Σ |‖zₙ‖ − ‖zₙ₋₁‖|`) measures total or
 
 | Technique | Where Used |
 |---|---|
-| Axis-aligned escape condition `\|Re(z)\| > R AND \|Im(z)\| > R` | All species shaders |
+| Axis-aligned escape condition: `|Re(z)| > R AND |Im(z)| > R` | All species shaders |
 | Wander metric (orbit activity integral) | All species shaders |
 | GLSL complex arithmetic (`cmul`, `cpow`, `csin`, `cexp`, `clog`) | All species shaders |
 | Julia iteration (fixed `c`, varying `z₀`) | 7 of 8 species |
@@ -75,7 +75,7 @@ Eight named morphologies, each a distinct complex function with a matched micros
 | `_spirochete` | `z³ + c` | Phase contrast | Gram-negative helical bacterium |
 | `_diatom` | `cos(z) + c` | Brightfield | Pennate frustule, bilateral striae |
 | `_ctenophore` | `exp(z) + c` | Deep-ocean darkfield | Iridescent comb-jelly, 8-fold plates |
-| `_spore` | `z² + c` | Brightfield | Pickover's authentic algorithm + axis bailout |
+| `_spore` | `z^2 + c` | Brightfield | Pickover's authentic algorithm + axis bailout |
 
 ---
 
