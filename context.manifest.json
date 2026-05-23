@@ -1,0 +1,140 @@
+{
+  "title": "Pickover Biomorphs",
+  "purpose": "Shader context repository implementing Clifford Pickover's biomorph algorithm as a full three-pass rendering pipeline. Eight taxonomically-named species rendered as microscopy specimens — darkfield, phase contrast, brightfield, and fluorescence. Primary inputs for RepoScripter: complex iteration aesthetics, biological stain palettes, orbit-derived anatomy coloring, and microscopy optical simulation.",
+
+  "tags": [
+    "biomorphs",
+    "pickover",
+    "complex-iteration",
+    "GLSL",
+    "fragment-shader",
+    "fractal",
+    "microscopy",
+    "biology",
+    "generative",
+    "WebGL",
+    "complex-dynamics",
+    "escape-time",
+    "orbit-coloring",
+    "staining",
+    "darkfield",
+    "phase-contrast",
+    "fluorescence",
+    "brightfield",
+    "parameter-space",
+    "creative-coding"
+  ],
+
+  "visual_motifs": [
+    "segmented exoskeletons with bilateral symmetry",
+    "radial spines and axial filaments",
+    "translucent membranes with visible nuclei",
+    "gram-negative helical traces",
+    "darkfield glow — bright specimen on absolute black",
+    "birefringent glass substrate with Newton rings",
+    "three-channel fluorescence composite (GFP green / RFP red / DAPI blue)",
+    "orbit boundary tendrils at high-wander regions",
+    "phase-contrast halos at specimen edges",
+    "pennate frustule bilateral striae",
+    "iridescent 8-fold comb-plate banding",
+    "nested convergence zones as anatomical depth"
+  ],
+
+  "techniques": [
+    "axis-aligned escape condition: |Re(z)| > R AND |Im(z)| > R (Pickover's biomorph modification)",
+    "wander metric: continuous orbit activity integral Σ||zₙ|| − ||zₙ₋₁||",
+    "three independent coloring axes: iter_ratio, wander, final_arg",
+    "GLSL complex arithmetic: cmul, cpow, csin, ccos, cexp, clog",
+    "Julia iteration (fixed c, varying z₀) for 7 species",
+    "Mandelbrot iteration (fixed z₀=0, varying c) for _spore",
+    "biological stain palette mapping (Gram, H&E, Giemsa, Crystal Violet, Periodic Acid-Schiff)",
+    "luminance-gradient edge detection for phase-contrast halo",
+    "three-channel false-color fluorescence composite with bleed-through and photobleaching",
+    "Köhler illumination simulation with depth-of-field softening",
+    "Brownian scatter and thermal caustics for saline medium",
+    "film grain via per-pixel hash function",
+    "vignetting for microscope field edge",
+    "mouse-driven real-time c-parameter mutation"
+  ],
+
+  "palette": [
+    "darkfield: near-black background (#050508), specimen glow in amber/gold or cyan/white",
+    "phase contrast: grey background, bright white halos, interior shadow",
+    "brightfield (Giemsa): azure blue / magenta / pale pink stain",
+    "brightfield (Crystal Violet): deep violet on pale substrate",
+    "fluorescence: GFP green (#39ff6a), RFP orange-red (#ff4422), DAPI blue (#4488ff) on black",
+    "insectoid: amber-gold chitin, cyan haemolymph, dark background",
+    "embryonic: pale membrane gold, nucleus pink-violet, yolk warm amber",
+    "radiolarian: silicate silver-white spines, aqua interior, darkfield black",
+    "spirochete: safranin red (gram-negative), dark olive membrane, phase-grey background",
+    "diatom: crystal violet / pale yellow striae, brightfield warm white",
+    "ctenophore: iridescent teal-to-magenta banding, deep blue-black ocean",
+    "spore: warm amber outer coat, pale grey interior, brightfield"
+  ],
+
+  "motion": [
+    "mouse x/y maps to Re(c)/Im(c) — lateral mouse motion mutates species morphology in real time",
+    "click freezes organism at current c value",
+    "u_time drives membrane pulsing and embryonic oscillation",
+    "environmental shaders use u_time for Brownian thermal drift and caustic animation",
+    "no camera motion — viewport is fixed; zoom is via coordinate scaling only"
+  ],
+
+  "geometry": [
+    "complex plane iteration — each pixel is a starting point z₀",
+    "axis-aligned symmetry created by Re/Im escape condition",
+    "radial symmetry in species using sin(z), cos(z), exp(z)",
+    "bilateral symmetry in diatom (cosine) and insectoid (power) species",
+    "nested basin boundaries create layered anatomical depth",
+    "orbit trap geometry: wander accumulator traces filament paths",
+    "3-fold helical twist in spirochete (z³ iteration)",
+    "8-fold periodicity in ctenophore (exp(z) winding number)"
+  ],
+
+  "blend_with": [
+    "clifford-attractors",
+    "strange-attractor-field-renderers",
+    "complex-dynamics-visualizations",
+    "optical-microscopy-simulation",
+    "electron-microscopy-aesthetic-shaders",
+    "orbit-trap-fractal-repos",
+    "biological-texture-generators",
+    "reaction-diffusion-systems"
+  ],
+
+  "avoid": [
+    "pure SDF geometric modeling with no orbital or biological context",
+    "clean modernist abstract geometry (no organic chaos)",
+    "standard Mandelbrot/Julia sets without axis-aligned escape modification",
+    "physically-based rendering pipelines (PBR) — this is optical simulation, not material rendering",
+    "procedural terrain or landscape shaders"
+  ],
+
+  "primary_context_files": [
+    "README.md",
+    "context.manifest.json",
+    "species/taxonomy.md",
+    "docs/algorithm.md",
+    "docs/coloring.md",
+    "docs/parameters.md",
+    "shaders/_base_insectoid.frag",
+    "shaders/_embryonic.frag",
+    "shaders/_radiolarian.frag",
+    "shaders/_spirochete.frag",
+    "shaders/_diatom.frag",
+    "shaders/_ctenophore.frag",
+    "shaders/_spore.frag",
+    "shaders/_hybrid_mutation.frag"
+  ],
+
+  "ignore": [
+    "*.zip",
+    "**/*.zip",
+    ".git/",
+    ".github/",
+    "**/__pycache__/",
+    "**/*.pyc",
+    "*.DS_Store",
+    "**/*.DS_Store"
+  ]
+}
